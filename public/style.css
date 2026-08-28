@@ -9,6 +9,11 @@
   --accent: #5b8cff;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+
+  /* 跳棋洞排成的三角格點，當作卡片底紋 */
+  --dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='26'%3E%3Cg fill='%23ffffff' fill-opacity='.035'%3E%3Ccircle cx='7.5' cy='6.5' r='2.3'/%3E%3Ccircle cx='22.5' cy='19.5' r='2.3'/%3E%3C/g%3E%3C/svg%3E");
+  /* 按鈕頂部的弧形反光 */
+  --sheen: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40' preserveAspectRatio='none'%3E%3Cpath d='M0 0h120v12c-40 10-80 14-120 9z' fill='%23ffffff' fill-opacity='.14'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -32,18 +37,38 @@ button, input { font: inherit; color: inherit; }
 
 /* ── 通用元件 ─────────────────────────────── */
 .btn {
+  position: relative;
   border: 1px solid var(--line);
-  background: #1e2531;
+  background-color: #1e2531;
+  background-image: var(--sheen);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   border-radius: 10px;
   padding: 10px 16px;
   cursor: pointer;
   transition: .15s;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 2px 6px rgba(0, 0, 0, .28);
 }
-.btn:hover:not(:disabled) { background: #26303f; border-color: #3a4761; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-primary { background: linear-gradient(180deg, #4f7ff5, #3b63d4); border-color: #4f7ff5; font-weight: 600; }
-.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #6290ff, #4471e6); }
-.btn-ghost { background: transparent; }
+.btn:hover:not(:disabled) { background-color: #2a3547; border-color: #3f4e6b; transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 4px rgba(0, 0, 0, .3) inset; }
+.btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+.btn:disabled { background-image: none; }
+
+.btn-primary {
+  background-color: #4270e4;
+  background-image: var(--sheen), linear-gradient(180deg, #5b8cff 0%, #3358c9 100%);
+  border-color: #5f8cff;
+  font-weight: 600;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .3) inset, 0 6px 16px rgba(56, 94, 205, .35);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #5482f2;
+  background-image: var(--sheen), linear-gradient(180deg, #6f9bff 0%, #3f66d8 100%);
+  border-color: #7aa2ff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .35) inset, 0 8px 22px rgba(56, 94, 205, .45);
+}
+.btn-ghost { background-color: transparent; background-image: none; box-shadow: none; }
+.btn-ghost:hover:not(:disabled) { background-color: rgba(255, 255, 255, .06); }
 .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
 .link-btn { background: none; border: 0; color: var(--ink-dim); text-decoration: underline; cursor: pointer; padding: 4px; }
 .link-btn:hover { color: var(--ink); }
@@ -57,7 +82,11 @@ button, input { font: inherit; color: inherit; }
 /* ── 大廳 / 房間 ──────────────────────────── */
 .lobby-card {
   width: min(620px, 100%);
-  background: var(--panel);
+  background-color: var(--panel);
+  background-image:
+    radial-gradient(560px 280px at 12% -12%, rgba(91, 140, 255, .13), transparent 68%),
+    radial-gradient(420px 240px at 105% 108%, rgba(168, 85, 247, .10), transparent 70%),
+    var(--dots);
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 32px;
@@ -106,12 +135,36 @@ button, input { font: inherit; color: inherit; }
 .rooms-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
 .rooms-head h2 { margin: 0; font-size: 15px; }
 .rooms-count { font-size: 12px; color: var(--ink-dim); }
-.rooms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 296px; overflow-y: auto; }
-.rooms-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; background: #161d27; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
-.rooms-list .rcode { font-weight: 700; letter-spacing: 3px; }
-.rooms-list .rinfo { flex: 1; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rooms-list .rslots { font-size: 12px; font-variant-numeric: tabular-nums; }
-.rooms-empty { justify-content: center; color: var(--ink-dim); font-size: 13px; }
+.rooms-list {
+  list-style: none; margin: 0; padding: 2px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 10px; max-height: 340px; overflow-y: auto;
+}
+.room-card {
+  display: flex; flex-direction: column; gap: 8px;
+  background-color: #161d27;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 60%);
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px;
+  transition: .15s;
+}
+.room-card:hover { border-color: #3f4e6b; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+.room-card.is-live { box-shadow: inset 3px 0 0 rgba(245, 158, 11, .6); }
+.rc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rc-head .rcode { font-weight: 700; letter-spacing: 3px; font-size: 17px; }
+.rc-meta { font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-seats { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-dim); }
+.rc-seats .sdot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.sdot.is-human { background: var(--accent); box-shadow: inset 0 1px 1px rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.4); }
+.sdot.is-ai { background: #f59e0b; box-shadow: inset 0 1px 1px rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.4); }
+.sdot.is-open { border: 1px dashed #46536e; }
+.rc-seats .rspec { margin-left: 4px; }
+.rc-seats .rslots { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ractions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ractions .btn { padding: 7px 4px; }
+.rooms-empty {
+  grid-column: 1 / -1; text-align: center; color: var(--ink-dim); font-size: 13px;
+  border: 1px dashed var(--line); border-radius: 12px; padding: 18px;
+}
 
 .code-input { text-align: center; letter-spacing: 8px; text-transform: uppercase; font-size: 20px; margin-bottom: 12px; }
 .conn { font-size: 12px; color: var(--ink-dim); margin: 14px 0 0; }
@@ -137,7 +190,8 @@ button, input { font: inherit; color: inherit; }
 /* ── 對局畫面 ─────────────────────────────── */
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 18px; border-bottom: 1px solid var(--line); background: rgba(16,21,29,.7);
+  padding: 12px 18px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(28,37,52,.85), rgba(16,21,29,.7));
   backdrop-filter: blur(8px); flex: none;
 }
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 10px; }
@@ -150,6 +204,11 @@ button, input { font: inherit; color: inherit; }
   gap: 18px; padding: 18px; min-height: 0;
 }
 .board-wrap { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; }
+/* 棋盤後方的柔光，讓底板浮起來 */
+.board-wrap::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(58% 52% at 50% 46%, rgba(91, 140, 255, .11), transparent 72%);
+}
 #board { width: 100%; height: 100%; max-height: calc(100vh - 110px); touch-action: manipulation; }
 
 .banner {
@@ -170,15 +229,28 @@ button, input { font: inherit; color: inherit; }
 .players { display: grid; gap: 8px; }
 .pcard {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255,255,255,.03), transparent), var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius); transition: .18s;
 }
-.pcard.is-turn { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(91,140,255,.35); }
+.pcard.is-turn {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(91,140,255,.35), 0 0 18px rgba(91,140,255,.18);
+}
+/* 玩家色點也做成小彈珠 */
+.pcard .dot, .seat-row .dot, .local-seat .dot, .banner .rankings .dot, .history .hdot {
+  background-image: radial-gradient(circle at 32% 28%, rgba(255,255,255,.65), rgba(255,255,255,0) 55%);
+  box-shadow: 0 1px 2px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.25) inset;
+}
 .pcard .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
 .pcard .nm { flex: 1; min-width: 0; }
 .pcard .nm b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pcard .nm small { color: var(--ink-dim); font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pcard .bar { width: 66px; height: 6px; border-radius: 3px; background: #222b39; overflow: hidden; flex: none; }
-.pcard .bar i { display: block; height: 100%; border-radius: 3px; }
+.pcard .bar { box-shadow: 0 1px 2px rgba(0,0,0,.4) inset; }
+.pcard .bar i {
+  display: block; height: 100%; border-radius: 3px; transition: width .35s ease;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.4), rgba(255,255,255,0));
+}
 .pcard .cnt { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink-dim); width: 38px; text-align: right; }
 .rank { font-size: 12px; background: #2b3446; border-radius: 6px; padding: 2px 6px; }
 
@@ -197,7 +269,12 @@ button, input { font: inherit; color: inherit; }
 .chat-form input { flex: 1; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: #10151d; outline: none; }
 
 /* ── 棋盤元素 ─────────────────────────────── */
-.hole { fill: #1c2431; stroke: #2b3546; stroke-width: .05; }
+/* 底板：六角星的凸包外擴一圈，粗描邊把角磨圓 */
+.plate {
+  fill: url(#plateg);
+  stroke: #2c384b; stroke-width: .85; stroke-linejoin: round; stroke-opacity: .6;
+}
+.hole { fill: url(#holeg); stroke: #313d51; stroke-width: .045; }
 .hole.hole-dest { stroke-width: .09; stroke-opacity: .5; }
 .hole.hole-mine { stroke-width: .13; stroke-opacity: .95; }
 
@@ -208,14 +285,36 @@ button, input { font: inherit; color: inherit; }
 
 .aim-line { stroke-width: .16; stroke-opacity: .3; stroke-dasharray: .55 .5; stroke-linecap: round; }
 .aim-head { fill-opacity: .35; }
-.piece { stroke: rgba(0,0,0,.45); stroke-width: .07; cursor: default; transition: transform .12s; }
+/* 立體棋子：外層 g 只負責位移，內層 .pc-in 負責縮放 */
+.piece { cursor: default; }
+.piece .pc-in { transition: transform .15s cubic-bezier(.34, 1.4, .64, 1); }
+.pc-shadow { fill: rgba(0, 0, 0, .5); }
+.pc-body { stroke: rgba(0, 0, 0, .5); stroke-width: .045; }
+.pc-gloss { fill: #fff; opacity: .52; }
+.pc-bounce { fill: #fff; opacity: .13; }
+
 .piece.mine { cursor: pointer; }
-.piece.mine:hover { filter: brightness(1.18); }
-.piece.sel { stroke: #fff; stroke-width: .14; }
-.target { fill: #ffffff; fill-opacity: .3; cursor: pointer; }
-.target:hover { fill-opacity: .75; }
-.target.jump { fill: #ffe08a; fill-opacity: .55; }
-.target.jump:hover { fill-opacity: .95; }
+.piece.mine .pc-body { stroke: rgba(255, 255, 255, .42); stroke-width: .06; }
+.piece.mine:hover .pc-in { transform: scale(1.12); }
+.piece.mine:hover .pc-gloss { opacity: .72; }
+
+.piece.sel .pc-body { stroke: #fff; stroke-width: .12; }
+.piece.sel .pc-in { animation: pc-pulse 1.15s ease-in-out infinite; }
+@keyframes pc-pulse {
+  0%, 100% { transform: scale(1.1); }
+  50%      { transform: scale(1.19); }
+}
+
+/* 騰空時影子淡掉，落地才變實 */
+.ghost .pc-in { transition: none; }
+.ghost .pc-shadow { opacity: calc(1 - var(--lift, 0) * .75); }
+
+.target { cursor: pointer; }
+.t-hit { fill: transparent; pointer-events: all; }   /* 放大的隱形點擊區 */
+.t-dot { fill: #ffffff; fill-opacity: .3; transition: fill-opacity .12s, transform .12s; pointer-events: none; }
+.target:hover .t-dot { fill-opacity: .9; transform: scale(1.25); }
+.target.jump .t-dot { fill: #ffe08a; fill-opacity: .55; }
+.target.jump:hover .t-dot { fill-opacity: 1; }
 .pathline { stroke: #ffe08a; stroke-width: .1; stroke-dasharray: .3 .22; fill: none; opacity: .85; pointer-events: none; }
 .lastline { stroke: #ffffff; stroke-width: .08; opacity: .3; fill: none; pointer-events: none; }
 .lastring { fill: none; stroke-width: .09; opacity: .7; pointer-events: none; }
@@ -248,7 +347,24 @@ button, input { font: inherit; color: inherit; }
   text-align: left; cursor: pointer; transition: .15s;
   background: #10151d; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
 }
-.mode-card:hover { background: #172030; border-color: #3a4761; transform: translateY(-1px); }
+.mode-card {
+  background-repeat: no-repeat;
+  background-position: right -18px bottom -22px;
+  background-size: 150px 130px;
+  overflow: hidden;
+}
+#btn-mode-online {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='130'%3E%3Ccircle cx='104' cy='42' r='30' fill='%235b8cff' fill-opacity='.14'/%3E%3Ccircle cx='68' cy='80' r='20' fill='%2314b8a6' fill-opacity='.12'/%3E%3Ccircle cx='118' cy='94' r='15' fill='%23a855f7' fill-opacity='.11'/%3E%3C/svg%3E");
+}
+#btn-mode-local {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='130'%3E%3Ccircle cx='104' cy='42' r='30' fill='%2322c55e' fill-opacity='.14'/%3E%3Ccircle cx='68' cy='80' r='20' fill='%23f59e0b' fill-opacity='.12'/%3E%3Ccircle cx='118' cy='94' r='15' fill='%23ef4444' fill-opacity='.11'/%3E%3C/svg%3E");
+}
+.mode-card:hover {
+  background-color: #172030;
+  border-color: #3f4e6b;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+}
 .mode-card .mode-ico { font-size: 26px; line-height: 1; }
 .mode-card b { font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mode-card small { color: var(--ink-dim); font-size: 12px; line-height: 1.5; }
@@ -277,7 +393,6 @@ button, input { font: inherit; color: inherit; }
 .rstatus.is-wait { color: #9fd3a6; background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.35); }
 .rstatus.is-live { color: #f5c26b; background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.38); }
 .rstatus.is-dead { color: #f3a2ae; background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.38); }
-.ractions { display: flex; gap: 6px; margin-left: auto; }
 
 /* ── 邀請連結 ─────────────────────────────── */
 .invite-box { background: #10151d; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 20px; }
@@ -300,10 +415,61 @@ button, input { font: inherit; color: inherit; }
 .chat div.spec { color: var(--ink-dim); }
 .chat div.spec span { color: #f5c26b; }
 
+/* ── 平板／觸控 ─────────────────────────────── */
+@media (hover: none), (pointer: coarse) {
+  /* 沒有滑鼠就沒有 hover，提示點一律畫得夠清楚 */
+  .t-dot { fill-opacity: .55; }
+  .target.jump .t-dot { fill-opacity: .8; }
+  .piece.mine .pc-body { stroke-width: .085; }
+
+  /* 手指的最小點擊尺寸 */
+  .btn { min-height: 46px; padding: 12px 18px; }
+  .btn-sm { min-height: 40px; padding: 9px 12px; font-size: 13px; }
+  .ractions .btn { padding: 9px 4px; }
+  .back-btn { min-height: 40px; padding: 8px 16px; }
+  .seg-btn { min-height: 44px; }
+  .link-btn { display: inline-block; padding: 10px 4px; }
+  .seat-row select, .local-seat select { min-height: 40px; }
+
+  /* iOS 在 font-size < 16px 的輸入框聚焦時會自動放大頁面 */
+  .field input, .code-input, .chat-form input { font-size: 16px; }
+
+  /* 點擊不要有灰色閃光 */
+  body { -webkit-tap-highlight-color: transparent; }
+}
+
+/* 平板直向：棋盤優先，面板收在下面 */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .game-grid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; padding: 12px; }
+  #board { max-height: 60vh; }
+  .panel { flex-direction: row; flex-wrap: wrap; overflow-y: visible; }
+  .players { flex: 1 1 100%; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .panel-box { flex: 1 1 260px; }
+  .history { max-height: 120px; }
+  .chat { height: 96px; }
+}
+
+/* 平板橫向：面板窄一點，棋盤大一點 */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .game-grid { grid-template-columns: minmax(0, 1fr) 262px; gap: 12px; padding: 12px; }
+}
+
 @media (max-width: 640px) {
   .lobby-card { padding: 22px; }
   .ractions { width: 100%; margin-left: 0; }
   .ractions .btn { flex: 1; }
   #invite-code { font-size: 32px; letter-spacing: 8px; }
   .page-head { flex-wrap: wrap; }
+}
+
+/* 使用者要求減少動態時，關掉會持續動的效果 */
+@media (prefers-reduced-motion: reduce) {
+  .piece.sel .pc-in { animation: none; transform: scale(1.1); }
+  .piece .pc-in, .btn, .mode-card, .pcard, .pcard .bar i { transition: none; }
+  .btn:hover:not(:disabled), .mode-card:hover { transform: none; }
+}
+
+/* 房間卡片在窄螢幕排成單欄 */
+@media (max-width: 520px) {
+  .rooms-list { grid-template-columns: 1fr; }
 }

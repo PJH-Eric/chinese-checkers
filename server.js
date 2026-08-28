@@ -17,7 +17,9 @@ const AI = require('./public/ai.js');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const AI_DELAY_MS = Number(process.env.AI_DELAY_MS || 700);
-const ROOM_TTL_MS = 30 * 60 * 1000;      // 全員離線後保留 30 分鐘
+// 房裡沒有任何真人玩家連線時，房間就關閉。
+// 預設 0＝立刻關；設 ROOM_GRACE_MS 可留一段緩衝，讓玩家重新整理後還能回座。
+const ROOM_GRACE_MS = Number(process.env.ROOM_GRACE_MS || 0);
 const MAX_ROOMS = Number(process.env.MAX_ROOMS || 500);   // 同時存在的房間上限
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -464,8 +466,9 @@ wss.on('connection', (ws) => {
       }
     }
     if (!room.humansConnected()) {
+      // 只剩電腦或觀戰者的房間沒有意義，直接收掉（含已開局的房間）
       room.emptySince = now();
-      if (!room.started) { room.dispose(); return; }
+      if (ROOM_GRACE_MS <= 0) { room.dispose(); return; }
     } else {
       room.reassignHost();
     }
@@ -482,13 +485,13 @@ setInterval(() => {
   });
 }, 30000).unref();
 
-// 房間回收
+// 房間回收：補掉緩衝期到期、或因例外沒走到 close 流程的房間
 setInterval(() => {
   for (const room of rooms.values()) {
     if (room.humansConnected()) { room.emptySince = now(); continue; }
-    if (now() - room.emptySince > ROOM_TTL_MS) room.dispose();
+    if (now() - room.emptySince >= ROOM_GRACE_MS) room.dispose();
   }
-}, 60000).unref();
+}, 20000).unref();
 
 server.listen(PORT, HOST, () => {
   console.log(`跳棋伺服器已啟動： http://localhost:${PORT}`);

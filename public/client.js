@@ -317,18 +317,34 @@
     list.forEach(function (r) {
       var full = r.taken >= r.numPlayers;
       var li = document.createElement('li');
-      var info = r.numPlayers + ' 人局';
-      if (r.ai) info += ' · 含 ' + r.ai + ' 個電腦';
-      if (r.host) info += ' · 房主 ' + r.host;
-      if (r.spectators) info += ' · ' + r.spectators + ' 人觀戰';
-      li.innerHTML =
-        '<span class="rcode">' + escapeHtml(r.code) + '</span>' +
-        '<span class="rstatus ' + (r.started ? 'is-live' : 'is-wait') + '">' +
-          (r.started ? '進行中' : '等待中') + '</span>' +
-        '<span class="rinfo">' + escapeHtml(info) + '</span>' +
-        '<span class="rslots">' + r.taken + '/' + r.numPlayers + '</span>';
+      li.className = 'room-card' + (r.started ? ' is-live' : '');
 
-      var acts = document.createElement('span');
+      var head = document.createElement('div');
+      head.className = 'rc-head';
+      head.innerHTML = '<span class="rcode">' + escapeHtml(r.code) + '</span>' +
+        '<span class="rstatus ' + (r.started ? 'is-live' : 'is-wait') + '">' +
+        (r.started ? '進行中' : '等待中') + '</span>';
+      li.appendChild(head);
+
+      var meta = document.createElement('div');
+      meta.className = 'rc-meta';
+      meta.textContent = r.numPlayers + ' 人局' + (r.host ? ' · 房主 ' + r.host : '');
+      li.appendChild(meta);
+
+      // 座位用小彈珠表示：真人實心、電腦琥珀色、空位空心
+      var seatDots = '';
+      for (var i = 0; i < r.numPlayers; i++) {
+        var kind = i < r.humans ? 'human' : (i < r.humans + r.ai ? 'ai' : 'open');
+        seatDots += '<i class="sdot is-' + kind + '"></i>';
+      }
+      var seats = document.createElement('div');
+      seats.className = 'rc-seats';
+      seats.innerHTML = seatDots +
+        (r.spectators ? '<span class="rspec">' + r.spectators + ' 人觀戰</span>' : '') +
+        '<span class="rslots">' + r.taken + '/' + r.numPlayers + '</span>';
+      li.appendChild(seats);
+
+      var acts = document.createElement('div');
       acts.className = 'ractions';
 
       var join = document.createElement('button');
@@ -536,15 +552,72 @@
 
   /* ── 棋盤 ─────────────────────────────── */
   var layers = {};
+
+  function svgEl(tag, attrs) {
+    var node = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) node.setAttribute(k, attrs[k]);
+    return node;
+  }
+
+  // k < 1 變暗、k > 1 變亮，用來從主色推出漸層的亮面與暗面
+  function shade(hex, k) {
+    var v = parseInt(hex.slice(1), 16);
+    var ch = [(v >> 16) & 255, (v >> 8) & 255, v & 255].map(function (c) {
+      return Math.max(0, Math.min(255, Math.round(c * k)));
+    });
+    return '#' + ch.map(function (c) { return ('0' + c.toString(16)).slice(-2); }).join('');
+  }
+
+  // 用 DOMParser 解析，避免各家瀏覽器對 SVG innerHTML 的差異。
+  // 注意 importNode 是複製而非搬移，來源節點不會消失，所以要先把子節點清單拍下來再走訪。
+  function svgFragment(markup) {
+    var parsed = new DOMParser().parseFromString(
+      '<svg xmlns="' + SVGNS + '">' + markup + '</svg>', 'image/svg+xml');
+    var frag = document.createDocumentFragment();
+    var kids = Array.prototype.slice.call(parsed.documentElement.childNodes);
+    kids.forEach(function (node) { frag.appendChild(document.importNode(node, true)); });
+    return frag;
+  }
+
+  // 棋子球體漸層、棋盤凹洞、底板
+  function buildDefs() {
+    var out = '';
+    CORNER_COLORS.forEach(function (col, i) {
+      out += '<radialGradient id="pcg' + i + '" cx="34%" cy="27%" r="78%">' +
+             '<stop offset="0%" stop-color="' + shade(col, 1.7) + '"/>' +
+             '<stop offset="40%" stop-color="' + col + '"/>' +
+             '<stop offset="100%" stop-color="' + shade(col, 0.42) + '"/>' +
+             '</radialGradient>';
+    });
+    out += '<radialGradient id="holeg" cx="50%" cy="32%" r="74%">' +
+           '<stop offset="0%" stop-color="#070b11"/>' +
+           '<stop offset="100%" stop-color="#1e2735"/></radialGradient>';
+    out += '<radialGradient id="plateg" cx="50%" cy="34%" r="76%">' +
+           '<stop offset="0%" stop-color="#1f2a39"/>' +
+           '<stop offset="100%" stop-color="#0f151e"/></radialGradient>';
+    return out;
+  }
   function buildBoardSvg() {
     var svg = el.board;
     svg.innerHTML = '';
-    ['zones', 'arrow', 'holes', 'last', 'pieces', 'hints', 'ghost'].forEach(function (name) {
+
+    var defs = document.createElementNS(SVGNS, 'defs');
+    defs.appendChild(svgFragment(buildDefs()));
+    svg.appendChild(defs);
+
+    ['plate', 'zones', 'arrow', 'holes', 'last', 'pieces', 'hints', 'ghost'].forEach(function (name) {
       var g = document.createElementNS(SVGNS, 'g');
       g.setAttribute('class', 'layer-' + name);
       svg.appendChild(g);
       layers[name] = g;
     });
+
+    // 六角星外圍的底板，讓棋盤浮在桌面上而不是貼在背景上
+    var outline = convexHull(BOARD.cells.map(function (c) { return [c.px, c.py]; }));
+    layers.plate.appendChild(svgEl('polygon', {
+      class: 'plate',
+      points: outline.map(function (p) { return (p[0] * 1.06) + ',' + (p[1] * 1.06); }).join(' ')
+    }));
 
     // 六個陣營底色
     for (var c = 0; c < 6; c++) {
@@ -667,6 +740,23 @@
     return { x: x / cells.length, y: y / cells.length };
   }
 
+  /**
+   * 一顆棋子＝桌面落影 + 漸層球體 + 主高光 + 反射光，看起來像玻璃彈珠。
+   * 位移放在外層 g 的 transform 屬性，縮放放在內層 .pc-in 交給 CSS，兩者才不會打架。
+   */
+  function pieceNode(corner) {
+    var g = document.createElementNS(SVGNS, 'g');
+    g.appendChild(svgEl('ellipse', { cx: 0, cy: 0.3, rx: 0.55, ry: 0.16, class: 'pc-shadow' }));
+    var inner = svgEl('g', { class: 'pc-in' });
+    inner.appendChild(svgEl('circle', { r: 0.62, class: 'pc-body', fill: 'url(#pcg' + corner + ')' }));
+    inner.appendChild(svgEl('ellipse', {
+      cx: -0.2, cy: -0.25, rx: 0.24, ry: 0.15, class: 'pc-gloss', transform: 'rotate(-30 -0.2 -0.25)'
+    }));
+    inner.appendChild(svgEl('circle', { cx: 0.19, cy: 0.25, r: 0.11, class: 'pc-bounce' }));
+    g.appendChild(inner);
+    return g;
+  }
+
   function drawPieces() {
     layers.pieces.innerHTML = '';
     if (!game) return;
@@ -674,13 +764,10 @@
     game.board.forEach(function (owner, id) {
       if (owner < 0) return;
       var cell = BOARD.cells[id];
-      var g = document.createElementNS(SVGNS, 'circle');
-      g.setAttribute('cx', cell.px);
-      g.setAttribute('cy', cell.py);
-      g.setAttribute('r', 0.62);
-      g.setAttribute('fill', CORNER_COLORS[game.seats[owner]]);
-      var cls = 'piece' + (owner === mySeat && isMyTurn() ? ' mine' : '') + (id === selected ? ' sel' : '');
-      g.setAttribute('class', cls);
+      var g = pieceNode(game.seats[owner]);
+      g.setAttribute('class', 'piece' +
+        (owner === mySeat && isMyTurn() ? ' mine' : '') + (id === selected ? ' sel' : ''));
+      g.setAttribute('transform', 'translate(' + cell.px + ' ' + cell.py + ')');
       g.dataset.id = id;
       if (id === hideId) g.setAttribute('opacity', '0');
       layers.pieces.appendChild(g);
@@ -714,15 +801,17 @@
     if (selected < 0) return;
     legal.forEach(function (mv) {
       var cell = BOARD.cells[mv.to];
-      var t = document.createElementNS(SVGNS, 'circle');
-      t.setAttribute('cx', cell.px);
-      t.setAttribute('cy', cell.py);
-      t.setAttribute('r', 0.3);
-      t.setAttribute('class', 'target' + (mv.jump ? ' jump' : ''));
-      t.dataset.to = mv.to;
-      t.addEventListener('mouseenter', function () { showPath(mv.path); });
-      t.addEventListener('mouseleave', clearPath);
-      layers.hints.appendChild(t);
+      var g = svgEl('g', {
+        class: 'target' + (mv.jump ? ' jump' : ''),
+        transform: 'translate(' + cell.px + ' ' + cell.py + ')'
+      });
+      // 隱形點擊區半徑取格距的一半，手指點得到又不會蓋到隔壁格
+      g.appendChild(svgEl('circle', { r: 0.52, class: 't-hit' }));
+      g.appendChild(svgEl('circle', { r: 0.3, class: 't-dot' }));
+      g.dataset.to = mv.to;
+      g.addEventListener('mouseenter', function () { showPath(mv.path); });
+      g.addEventListener('mouseleave', clearPath);
+      layers.hints.appendChild(g);
     });
   }
 
@@ -804,9 +893,7 @@
     animateJob = { to: lm.to };
     drawPieces();
 
-    var ghost = document.createElementNS(SVGNS, 'circle');
-    ghost.setAttribute('r', 0.62);
-    ghost.setAttribute('fill', CORNER_COLORS[game.seats[lm.player]]);
+    var ghost = pieceNode(game.seats[lm.player]);
     ghost.setAttribute('class', 'piece ghost');
     layers.ghost.appendChild(ghost);
 
@@ -823,9 +910,12 @@
       var a = pts[i], b = pts[i + 1];
       var x = a.px + (b.px - a.px) * u;
       var y = a.py + (b.py - a.py) * u;
-      if (lm.jump) y -= Math.sin(u * Math.PI) * 0.55;   // 跳躍弧線
-      ghost.setAttribute('cx', x);
-      ghost.setAttribute('cy', y);
+      var lift = lm.jump ? Math.sin(u * Math.PI) : 0;
+      if (lift) y -= lift * 0.55;                        // 跳躍弧線
+      // 騰空時球稍微放大、影子縮小，跳起來才有重量感
+      ghost.setAttribute('transform',
+        'translate(' + x + ' ' + y + ') scale(' + (1 + lift * 0.1) + ')');
+      ghost.style.setProperty('--lift', String(lift));
       if (k < 1) requestAnimationFrame(frame);
       else {
         layers.ghost.innerHTML = '';

@@ -156,8 +156,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   t('觀戰者離線後從名單移除', syncOut && syncOut.room.spectators.length === 1, syncOut && syncOut.room.spectators);
   t('觀戰者離開不影響對局進行', syncOut && syncOut.room.started === true);
 
+  console.log('沒有真人就關房');
+  // 此時房內：座位 0/1 是真人、座位 2 是 AI，late 在觀戰
+  host.ws.close();
+  await sleep(120);
+  browser.clear();
+  browser.send({ t: 'peek', code });
+  const still = await browser.wait(m => m.t === 'roomInfo');
+  t('還有一位真人在線時房間留著', still.exists === true, still);
+
+  p2.ws.close();                       // 最後一位真人也離開
+  const kicked = await late.wait(m => m.t === 'kicked');
+  t('真人全數離線後觀戰者被請出房間', /關閉/.test(kicked.msg), kicked);
+
+  const checker = client('checker');
+  await checker.open();
+  checker.send({ t: 'peek', code });
+  const gone = await checker.wait(m => m.t === 'roomInfo');
+  t('房間已被回收（只剩 AI 與觀戰者不算數）', gone.exists === false, gone);
+
+  checker.send({ t: 'lobby' });
+  const roomsEnd = await checker.wait(m => m.t === 'rooms');
+  t('大廳列表也不再出現該房', !roomsEnd.rooms.some(r => r.code === code), roomsEnd.rooms);
+
   console.log('\n通過 ' + pass + ' 項' + (process.exitCode ? '（有失敗）' : ''));
-  [host, browser, p2, late].forEach(c => c.ws.close());
+  [browser, late, checker].forEach(c => c.ws.close());
   server.close();
 })().catch(e => {
   console.error('\n測試中斷：' + e.message);
