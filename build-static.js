@@ -9,7 +9,9 @@ const path = require('path');
 
 const SRC = path.join(__dirname, 'public');
 const OUT = path.join(__dirname, 'dist');
-const ONLINE_URL = process.argv[2] || process.env.ONLINE_URL || '';
+// 連線對戰版網址（部署在 Render）。可用 CLI 參數或 ONLINE_URL 環境變數覆蓋。
+const DEFAULT_ONLINE_URL = 'https://chinese-checkers-7p4g.onrender.com/';
+const ONLINE_URL = process.argv[2] || process.env.ONLINE_URL || DEFAULT_ONLINE_URL;
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });

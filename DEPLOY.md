@@ -54,10 +54,14 @@ Render 免費方案支援 WebSocket，`render.yaml` 已經寫好：
 > 免費方案閒置約 15 分鐘會休眠，第一個人連進來要等幾秒喚醒；喚醒後就正常。
 > 休眠時房間會清空（本專案的房間狀態存在記憶體）。
 
-**把兩邊接起來**：在 repo 的
-**Settings → Secrets and variables → Actions → Variables → New repository variable**
-新增 `ONLINE_URL`，值填 Render 網址。下次 Pages 部署時，單機版首頁就會出現
-「開啟連線版 →」的連結。
+**把兩邊接起來**：`build-static.js` 裡的 `DEFAULT_ONLINE_URL` 已經填好目前的 Render
+網址，單機版首頁會自動出現「開啟連線版 →」的連結，不需要額外設定。
+
+換了網址的話，兩種改法擇一：
+
+- 直接改 `build-static.js` 的 `DEFAULT_ONLINE_URL`（最簡單）
+- 或在 repo 的 **Settings → Secrets and variables → Actions → Variables → New
+  repository variable** 新增 `ONLINE_URL`，值填新網址（會覆蓋上面的預設值）
 
 ### 其他選擇
 

@@ -7,7 +7,13 @@
 
 [![Tests](https://github.com/PJH-Eric/chinese-checkers/actions/workflows/test.yml/badge.svg)](https://github.com/PJH-Eric/chinese-checkers/actions/workflows/test.yml)
 
-線上試玩（單機版）：<https://pjh-eric.github.io/chinese-checkers/>
+線上試玩：
+
+- **單機版**（對電腦 / 同裝置輪流）：<https://pjh-eric.github.io/chinese-checkers/>
+- **連線對戰版**（最多 3 人）：<https://chinese-checkers-7p4g.onrender.com/>
+
+> 連線版跑在 Render 免費方案，閒置約 15 分鐘會休眠，第一個連進來的人要等幾秒喚醒。
+
 部署方式見 [DEPLOY.md](DEPLOY.md)。
 
 - 前端：原生 HTML / CSS / SVG，無前端框架
