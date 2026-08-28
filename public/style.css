@@ -473,3 +473,10 @@ button, input { font: inherit; color: inherit; }
 @media (max-width: 520px) {
   .rooms-list { grid-template-columns: 1fr; }
 }
+
+/* 座位上的斷線標記 */
+.offtag {
+  font-size: 11px; font-style: normal; font-weight: 400; margin-left: 8px;
+  color: #f3a2ae; background: rgba(239, 68, 68, .14);
+  border: 1px solid rgba(239, 68, 68, .38); border-radius: 999px; padding: 1px 8px;
+}

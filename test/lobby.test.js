@@ -2,6 +2,7 @@
 'use strict';
 process.env.PORT = process.env.TEST_PORT || '31711';
 process.env.AI_DELAY_MS = '10';
+process.env.ROOM_GRACE_MS = '400';   // 測試用短緩衝，正式預設 45 秒
 
 const WebSocket = require('ws');
 const { server } = require('../server.js');
@@ -52,6 +53,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   host.send({ t: 'create', name: '房主小明', numPlayers: 3 });
   const welcome = await host.wait(m => m.t === 'welcome');
   const code = welcome.code;
+  const hostToken = welcome.token;
   t('建房者拿到座位 0', welcome.seat === 0, welcome);
   t('房號為 4 碼', /^[A-Z0-9]{4}$/.test(code), code);
 
@@ -156,18 +158,37 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   t('觀戰者離線後從名單移除', syncOut && syncOut.room.spectators.length === 1, syncOut && syncOut.room.spectators);
   t('觀戰者離開不影響對局進行', syncOut && syncOut.room.started === true);
 
-  console.log('沒有真人就關房');
-  // 此時房內：座位 0/1 是真人、座位 2 是 AI，late 在觀戰
+  console.log('重新整理不會失去房間');
+  // 此時房內：座位 0/1 是真人、座位 2 是 AI，late 在觀戰。
+  // 重新整理＝socket 直接斷掉，不會送 leave。
   host.ws.close();
   await sleep(120);
   browser.clear();
   browser.send({ t: 'peek', code });
-  const still = await browser.wait(m => m.t === 'roomInfo');
-  t('還有一位真人在線時房間留著', still.exists === true, still);
+  const during = await browser.wait(m => m.t === 'roomInfo');
+  t('房主斷線後房間仍在（緩衝期內）', during.exists === true, during);
 
-  p2.ws.close();                       // 最後一位真人也離開
-  const kicked = await late.wait(m => m.t === 'kicked');
-  t('真人全數離線後觀戰者被請出房間', /關閉/.test(kicked.msg), kicked);
+  const back = client('back');
+  await back.open();
+  back.send({ t: 'rejoin', code, token: hostToken });
+  const bw = await back.wait(m => m.t === 'welcome');
+  t('憑原本的 token 回到座位 0', bw.seat === 0, bw);
+  const bs = await back.wait(m => m.t === 'sync' && m.game);
+  t('回座後對局狀態原封不動', bs.room.started === true && Array.isArray(bs.game.board), bs.room.started);
+  t('座位重新標記為連線中', bs.room.seats[0].connected === true, bs.room.seats[0]);
+  t('斷線期間座位沒有被釋出', bs.room.seats[0].kind === 'human', bs.room.seats[0]);
+
+  console.log('緩衝期過了才真的關房');
+  back.ws.close();
+  p2.ws.close();                       // 兩位真人都斷線，且都沒有主動離開
+  await sleep(120);
+  browser.clear();
+  browser.send({ t: 'lobby' });
+  const midRooms = await browser.wait(m => m.t === 'rooms');
+  t('全員斷線中的房間不列在大廳', !midRooms.rooms.some(r => r.code === code), midRooms.rooms);
+
+  const kicked = await late.wait(m => m.t === 'kicked', 4000);
+  t('緩衝期結束後觀戰者被請出房間', /關閉/.test(kicked.msg), kicked);
 
   const checker = client('checker');
   await checker.open();
@@ -175,12 +196,23 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const gone = await checker.wait(m => m.t === 'roomInfo');
   t('房間已被回收（只剩 AI 與觀戰者不算數）', gone.exists === false, gone);
 
-  checker.send({ t: 'lobby' });
-  const roomsEnd = await checker.wait(m => m.t === 'rooms');
-  t('大廳列表也不再出現該房', !roomsEnd.rooms.some(r => r.code === code), roomsEnd.rooms);
+  console.log('主動離開立刻關房，不等緩衝');
+  const solo = client('solo');
+  await solo.open();
+  solo.send({ t: 'create', name: '孤狼', numPlayers: 2 });
+  const sw = await solo.wait(m => m.t === 'welcome');
+  const t0 = Date.now();
+  solo.send({ t: 'leave' });
+  await sleep(60);
+  checker.clear();
+  checker.send({ t: 'peek', code: sw.code });
+  const soloGone = await checker.wait(m => m.t === 'roomInfo');
+  const elapsed = Date.now() - t0;
+  t('按離開後房間立刻消失', soloGone.exists === false, soloGone);
+  t('而且沒有等到緩衝期（' + elapsed + 'ms < 400ms）', elapsed < 400, elapsed);
 
   console.log('\n通過 ' + pass + ' 項' + (process.exitCode ? '（有失敗）' : ''));
-  [browser, late, checker].forEach(c => c.ws.close());
+  [browser, late, checker, solo].forEach(c => c.ws.close());
   server.close();
 })().catch(e => {
   console.error('\n測試中斷：' + e.message);

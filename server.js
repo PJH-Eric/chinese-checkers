@@ -17,9 +17,11 @@ const AI = require('./public/ai.js');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const AI_DELAY_MS = Number(process.env.AI_DELAY_MS || 700);
-// 房裡沒有任何真人玩家連線時，房間就關閉。
-// 預設 0＝立刻關；設 ROOM_GRACE_MS 可留一段緩衝，讓玩家重新整理後還能回座。
-const ROOM_GRACE_MS = Number(process.env.ROOM_GRACE_MS || 0);
+// 房裡沒有任何真人玩家連線時關閉房間，但保留一段緩衝，
+// 讓「重新整理／網路瞬斷」的玩家還能憑 token 回到原座位。
+// 按「離開」是主動退出，會立刻釋出座位、不吃這段緩衝。
+const ROOM_GRACE_MS = Number(process.env.ROOM_GRACE_MS || 45000);
+const SWEEP_MS = Math.min(5000, Math.max(250, Math.floor(ROOM_GRACE_MS / 2)));
 const MAX_ROOMS = Number(process.env.MAX_ROOMS || 500);   // 同時存在的房間上限
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -41,6 +43,7 @@ function roomList() {
   const list = [];
   for (const r of rooms.values()) {
     if (r.private) continue;                 // 不公開房間只能靠房號進入
+    if (!r.humansConnected()) continue;      // 全員斷線中的房間先不列，等它回來或被回收
     const taken = r.seats.filter(s => s.kind !== 'open').length;
     if (taken === 0) continue;
     list.push({
@@ -88,7 +91,8 @@ class Room {
       level: 'normal',
       token: null,
       connected: false,
-      socket: null
+      socket: null,
+      offSince: 0              // 斷線起始時間，0 代表沒斷線
     }));
     this.state = null;
     this.started = false;
@@ -218,18 +222,26 @@ class Room {
     if (this.history.length > 300) this.history.splice(0, this.history.length - 300);
   }
 
-  /** 房主（座位 0）離開且尚未開局時，把還在線上的玩家遞補為房主 */
+  /**
+   * 房主（座位 0）不在線且尚未開局時，把還在線上的玩家遞補為房主。
+   * 用「交換」而不是覆蓋，斷線中的原房主才能保住 token 回到自己那一席。
+   * 開局後座位索引已經綁定顏色與棋子，不能再動。
+   */
   reassignHost() {
-    if (this.started || this.seats[0].kind !== 'open') return false;
+    if (this.started) return false;
+    if (this.seats[0].connected) return false;
     const idx = this.seats.findIndex((s, i) => i > 0 && s.kind === 'human' && s.connected);
     if (idx < 0) return false;
-    const moved = this.seats[idx];
-    this.seats[0] = moved;
-    this.seats[idx] = { kind: 'open', name: '', level: 'normal', token: null, connected: false, socket: null };
-    if (moved.socket) {
-      moved.socket.seatIndex = 0;
-      send(moved.socket, { t: 'welcome', code: this.code, seat: 0, token: moved.token, hostSeat: 0 });
-    }
+    const tmp = this.seats[0];
+    this.seats[0] = this.seats[idx];
+    this.seats[idx] = tmp;
+    [0, idx].forEach(i => {
+      const seat = this.seats[i];
+      if (seat.socket) {
+        seat.socket.seatIndex = i;
+        send(seat.socket, { t: 'welcome', code: this.code, seat: i, token: seat.token, hostSeat: 0 });
+      }
+    });
     return true;
   }
 
@@ -268,6 +280,7 @@ function attach(ws, room, seatIndex, name, tk) {
   seat.token = tk;
   seat.connected = true;
   seat.socket = ws;
+  seat.offSince = 0;
   ws.roomCode = room.code;
   ws.seatIndex = seatIndex;
   lobbyClients.delete(ws);
@@ -358,6 +371,7 @@ wss.on('connection', (ws) => {
         seat.kind = 'human';
         seat.connected = true;
         seat.socket = ws;
+        seat.offSince = 0;
         ws.roomCode = r.code;
         ws.seatIndex = idx;
         lobbyClients.delete(ws);
@@ -441,6 +455,29 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      // 按下「離開」＝主動退出，跟斷線不同：立刻釋出座位，房間該關就關
+      case 'leave': {
+        if (ws.spectator) { detach(ws); lobbyClients.add(ws); break; }
+        if (!room) { lobbyClients.add(ws); break; }
+        const seat = room.seats[seatIndex];
+        if (seat && seat.socket === ws) {
+          if (room.started) {
+            // 對局進行中不能把座位變空位，棋子還在盤上；交給房主用 AI 接手
+            Object.assign(seat, { connected: false, socket: null, token: null, offSince: now() });
+          } else {
+            Object.assign(seat, {
+              kind: 'open', name: '', token: null, socket: null, connected: false, offSince: 0
+            });
+          }
+        }
+        ws.roomCode = null;
+        ws.seatIndex = -1;
+        lobbyClients.add(ws);
+        if (!room.humansConnected()) room.dispose();
+        else { room.reassignHost(); room.sync(); }
+        break;
+      }
+
       case 'ping':
         send(ws, { t: 'pong' });
         break;
@@ -458,15 +495,13 @@ wss.on('connection', (ws) => {
     }
     const seat = room.seats[ws.seatIndex];
     if (seat && seat.socket === ws) {
+      // 非主動離開（重新整理、網路瞬斷、關掉分頁）：座位與 token 都留著，
+      // 等 ROOM_GRACE_MS 過了還沒回來，才由回收器釋出或關房。
       seat.connected = false;
       seat.socket = null;
-      if (!room.started) {
-        // 尚未開局就離開，直接釋出座位
-        Object.assign(seat, { kind: 'open', name: '', token: null });
-      }
+      seat.offSince = now();
     }
     if (!room.humansConnected()) {
-      // 只剩電腦或觀戰者的房間沒有意義，直接收掉（含已開局的房間）
       room.emptySince = now();
       if (ROOM_GRACE_MS <= 0) { room.dispose(); return; }
     } else {
@@ -485,13 +520,27 @@ setInterval(() => {
   });
 }, 30000).unref();
 
-// 房間回收：補掉緩衝期到期、或因例外沒走到 close 流程的房間
+// 回收器：緩衝期一過，釋出回不來的座位、關掉沒有真人的房間
 setInterval(() => {
+  const cutoff = now() - ROOM_GRACE_MS;
   for (const room of rooms.values()) {
+    // 未開局的房間，斷線太久的座位讓出來給別人
+    if (!room.started) {
+      let freed = false;
+      for (const seat of room.seats) {
+        if (seat.kind === 'human' && !seat.connected && seat.offSince && seat.offSince <= cutoff) {
+          Object.assign(seat, {
+            kind: 'open', name: '', token: null, socket: null, connected: false, offSince: 0
+          });
+          freed = true;
+        }
+      }
+      if (freed) { room.reassignHost(); room.sync(); }
+    }
     if (room.humansConnected()) { room.emptySince = now(); continue; }
-    if (now() - room.emptySince >= ROOM_GRACE_MS) room.dispose();
+    if (room.emptySince <= cutoff) room.dispose();
   }
-}, 20000).unref();
+}, SWEEP_MS).unref();
 
 server.listen(PORT, HOST, () => {
   console.log(`跳棋伺服器已啟動： http://localhost:${PORT}`);

@@ -433,6 +433,10 @@
   function leave() {
     clearSaved();
     if (local) { local.send({ t: 'stop' }); local = null; }
+    // 主動離開要讓伺服器區分於「重新整理」，否則座位會被保留到緩衝期結束
+    if (ws && ws.readyState === 1) {
+      try { ws.send(JSON.stringify({ t: 'leave' })); } catch (e) {}
+    }
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
     mySeat = -1; roomCode = null; room = null; game = null; selected = -1; spectating = false;
     setConn(OFFLINE ? '離線版：可對電腦或多人輪流同一台裝置' : '已離開房間');
@@ -480,9 +484,12 @@
       who.className = 'who';
       var label = s.kind === 'open' ? '（等待玩家加入…）' : s.name;
       var tag = i === mySeat ? '（你）' : '';
-      who.innerHTML = '<b>' + escapeHtml(label) + tag + '</b>' +
+      var offline = s.kind === 'human' && !s.connected;
+      who.innerHTML = '<b>' + escapeHtml(label) + tag +
+        (offline ? '<i class="offtag">斷線中</i>' : '') + '</b>' +
         '<small>' + CORNER_NAMES[s.corner] + '陣營 → ' + CORNER_NAMES[s.dest] + '陣營' +
-        (s.kind === 'ai' ? ' · 電腦（' + levelName(s.level) + '）' : '') + '</small>';
+        (s.kind === 'ai' ? ' · 電腦（' + levelName(s.level) + '）' : '') +
+        (offline ? ' · 等待重新連線' : '') + '</small>';
       li.appendChild(who);
 
       if (mySeat === 0 && i !== 0 && !room.started) {
