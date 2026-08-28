@@ -18,19 +18,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Build static build
         run: node build-static.js "${{ vars.ONLINE_URL }}"
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           # 倉庫尚未啟用 Pages 時，讓 workflow 自動以 GitHub Actions 為來源啟用
           enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
+          # v5 預設排除隱藏檔，dist/.nojekyll 會被丟掉
+          include-hidden-files: true
 
   deploy:
     needs: build
@@ -40,4 +42,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

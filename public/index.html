@@ -11,8 +11,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<!-- ── 大廳 ───────────────────────────────────────────── -->
-<section id="view-lobby" class="view">
+<!-- ── 首頁：選模式 ─────────────────────────────── -->
+<section id="view-home" class="view">
   <div class="lobby-card">
     <h1 class="brand">跳棋<span>Chinese Checkers</span></h1>
     <p class="tagline">六角星 121 格 · 標準跳法 · 最多 3 人線上對戰</p>
@@ -22,7 +22,72 @@
       <input id="nickname" maxlength="16" placeholder="輸入暱稱" autocomplete="off">
     </label>
 
-    <div class="lobby-split" data-online>
+    <div class="mode-grid">
+      <button id="btn-mode-online" class="mode-card" data-online>
+        <span class="mode-ico">🌐</span>
+        <b>線上對戰</b>
+        <small>看看現在有哪些房間，加入對戰或純觀戰；也可以自己開一間</small>
+      </button>
+      <button id="btn-mode-local" class="mode-card">
+        <span class="mode-ico">🎲</span>
+        <b>本機對戰 <i class="badge">不需連線</i></b>
+        <small>對電腦，或幾個人輪流用這一台裝置下</small>
+      </button>
+    </div>
+
+    <button id="btn-rules-lobby" class="link-btn">查看規則說明</button>
+    <p class="conn" id="conn-status">連線中…</p>
+  </div>
+</section>
+
+<!-- ── 邀請連結落地頁 ───────────────────────────── -->
+<section id="view-invite" class="view" hidden>
+  <div class="lobby-card">
+    <h1 class="brand">跳棋<span>Chinese Checkers</span></h1>
+    <p class="tagline">有人用連結邀請你加入這個房間</p>
+
+    <div class="invite-box">
+      <div class="invite-code">
+        <span id="invite-code">----</span>
+        <span id="invite-status" class="rstatus is-wait">查詢中</span>
+      </div>
+      <p id="invite-meta" class="invite-meta">正在查詢房間狀態…</p>
+    </div>
+
+    <label class="field">
+      <span>你的暱稱</span>
+      <input id="invite-nick" maxlength="16" placeholder="輸入暱稱" autocomplete="off">
+    </label>
+
+    <div class="stack">
+      <button id="btn-invite-join" class="btn btn-primary btn-wide" disabled>加入對戰</button>
+      <button id="btn-invite-spec" class="btn btn-wide" disabled>加入觀戰</button>
+    </div>
+
+    <button id="btn-invite-lobby" class="link-btn">改去大廳看看其他房間</button>
+    <p class="conn"></p>
+  </div>
+</section>
+
+<!-- ── 線上大廳 ─────────────────────────────────── -->
+<section id="view-online" class="view" hidden>
+  <div class="lobby-card">
+    <div class="page-head">
+      <button id="btn-online-back" class="back-btn">← 返回</button>
+      <h2>線上大廳</h2>
+      <span class="who-chip">暱稱 <b id="who-name">—</b></span>
+    </div>
+
+    <div class="rooms-block">
+      <div class="rooms-head">
+        <h2>房間列表</h2>
+        <span id="rooms-count" class="rooms-count"></span>
+      </div>
+      <ul id="rooms-list" class="rooms-list"><li class="rooms-empty">目前沒有房間，建一間吧！</li></ul>
+      <p class="rooms-foot">等待中的房間可以<b>加入對戰</b>；已經開打的房間仍然可以<b>加入觀戰</b>。</p>
+    </div>
+
+    <div class="lobby-split">
       <div class="lobby-block">
         <h2>建立房間</h2>
         <div class="seg" id="seg-players">
@@ -34,47 +99,59 @@
       </div>
 
       <div class="lobby-block">
-        <h2>加入房間</h2>
+        <h2>用房號加入</h2>
         <input id="join-code" class="code-input" maxlength="4" placeholder="房號" autocomplete="off" spellcheck="false">
-        <button id="btn-join" class="btn">加入</button>
+        <div class="stack">
+          <button id="btn-join" class="btn btn-primary">加入對戰</button>
+          <button id="btn-spectate" class="btn">加入觀戰</button>
+        </div>
       </div>
     </div>
 
-    <div class="local-block">
-      <h2>本機對戰<span class="badge">不需連線</span></h2>
-      <p class="local-hint">對電腦，或幾個人輪流用這一台裝置下。</p>
-      <div class="seg" id="seg-local-players">
-        <button class="seg-btn is-on" data-n="3">3 人局</button>
-        <button class="seg-btn" data-n="2">2 人局</button>
-      </div>
-      <div id="local-seats" class="local-seats"></div>
-      <button id="btn-local-start" class="btn btn-primary">開始本機對戰</button>
-    </div>
-
-    <div class="rooms-block" data-online>
-      <div class="rooms-head">
-        <h2>公開房間</h2>
-        <span id="rooms-count" class="rooms-count"></span>
-      </div>
-      <ul id="rooms-list" class="rooms-list"><li class="rooms-empty">目前沒有等待中的房間，建一間吧！</li></ul>
-    </div>
-
-    <button id="btn-rules-lobby" class="link-btn">查看規則說明</button>
-    <p class="conn" id="conn-status">連線中…</p>
+    <p class="conn"></p>
   </div>
 </section>
 
-<!-- ── 房間等待 ─────────────────────────────────────────── -->
+<!-- ── 本機對戰設定 ─────────────────────────────── -->
+<section id="view-local" class="view" hidden>
+  <div class="lobby-card">
+    <div class="page-head">
+      <button id="btn-local-back" class="back-btn">← 返回</button>
+      <h2>本機對戰</h2>
+      <span class="who-chip badge">不需連線</span>
+    </div>
+
+    <p class="local-hint">對電腦，或幾個人輪流用這一台裝置下。每個座位可以各自選真人或電腦難度。</p>
+
+    <div class="seg" id="seg-local-players">
+      <button class="seg-btn is-on" data-n="3">3 人局</button>
+      <button class="seg-btn" data-n="2">2 人局</button>
+    </div>
+    <div id="local-seats" class="local-seats"></div>
+    <button id="btn-local-start" class="btn btn-primary btn-wide">開始本機對戰</button>
+  </div>
+</section>
+
+<!-- ── 房間等待 ─────────────────────────────────── -->
 <section id="view-room" class="view" hidden>
   <div class="lobby-card">
     <h2 class="room-title">房間代碼</h2>
     <div class="code-display">
       <span id="room-code">----</span>
-      <button id="btn-copy" class="btn btn-ghost">複製</button>
+      <div class="code-actions">
+        <button id="btn-copy" class="btn btn-ghost btn-sm">複製房號</button>
+        <button id="btn-copy-link" class="btn btn-ghost btn-sm">複製邀請連結</button>
+      </div>
     </div>
-    <p class="tagline">把房號給朋友，他們在首頁輸入即可加入。</p>
+    <p class="tagline">把房號或邀請連結給朋友，他們可以選擇加入對戰或觀戰。</p>
+    <p id="invite-link-text" class="invite-link"></p>
 
     <ul id="seat-list" class="seat-list"></ul>
+
+    <div id="spectator-box" class="spectator-box" hidden>
+      <h3>觀戰席 <span id="spectator-count" class="rooms-count"></span></h3>
+      <div id="spectator-list" class="spectator-list"></div>
+    </div>
 
     <div class="room-actions">
       <button id="btn-start" class="btn btn-primary">開始遊戲</button>
@@ -84,11 +161,12 @@
   </div>
 </section>
 
-<!-- ── 對局 ───────────────────────────────────────────── -->
+<!-- ── 對局 ───────────────────────────────────── -->
 <section id="view-game" class="view view-game" hidden>
   <header class="topbar">
     <div class="topbar-left">
       <span class="pill" id="game-code">----</span>
+      <span class="pill spec-pill" id="spec-pill" hidden>觀戰中</span>
       <span class="turn-chip" id="turn-chip">等待中</span>
     </div>
     <div class="topbar-right">
@@ -124,7 +202,7 @@
   </main>
 </section>
 
-<!-- ── 規則說明 ─────────────────────────────────────────── -->
+<!-- ── 規則說明 ─────────────────────────────────── -->
 <div id="rules-modal" class="modal" hidden>
   <div class="modal-card">
     <h2>中國跳棋規則</h2>

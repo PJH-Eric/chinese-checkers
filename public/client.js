@@ -12,9 +12,14 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {};
-  ['view-lobby', 'view-room', 'view-game', 'toast', 'nickname', 'seg-players', 'btn-create',
-   'join-code', 'btn-join', 'conn-status', 'room-code', 'btn-copy', 'seat-list', 'btn-start',
-   'btn-leave-room', 'room-hint', 'game-code', 'turn-chip', 'board', 'banner', 'players',
+  ['view-home', 'view-invite', 'view-online', 'view-local', 'view-room', 'view-game', 'toast', 'nickname',
+   'invite-code', 'invite-status', 'invite-meta', 'invite-nick', 'btn-invite-join',
+   'btn-invite-spec', 'btn-invite-lobby', 'btn-copy-link', 'invite-link-text',
+   'btn-mode-online', 'btn-mode-local', 'btn-online-back', 'btn-local-back', 'who-name',
+   'seg-players', 'btn-create', 'join-code', 'btn-join', 'btn-spectate', 'conn-status',
+   'room-code', 'btn-copy', 'seat-list', 'btn-start', 'btn-leave-room', 'room-hint',
+   'spectator-box', 'spectator-list', 'spectator-count', 'spec-pill',
+   'game-code', 'turn-chip', 'board', 'banner', 'players',
    'history', 'chat', 'chat-form', 'chat-input', 'btn-rules', 'btn-rules-lobby',
    'btn-rules-close', 'rules-modal', 'btn-leave', 'btn-restart',
    'rooms-list', 'rooms-count', 'chk-private',
@@ -36,6 +41,10 @@
   var OFFLINE = !!window.OFFLINE_ONLY;
   var animatedTurn = -1;
   var pendingMove = false;
+  var spectating = false;         // 觀戰模式：沒有座位，只看不下
+  var homeView = 'view-home';     // 離開房間後要回到哪一頁
+  var inviteCode = null;          // 從邀請連結進來的房號
+  var inviteTimer = null;         // 邀請落地頁的狀態輪詢
 
   function toast(msg) {
     el.toast.textContent = msg;
@@ -44,8 +53,96 @@
     toast._t = setTimeout(function () { el.toast.hidden = true; }, 3200);
   }
 
+  var VIEWS = ['view-home', 'view-invite', 'view-online', 'view-local', 'view-room', 'view-game'];
   function show(view) {
-    ['view-lobby', 'view-room', 'view-game'].forEach(function (v) { el[v].hidden = (v !== view); });
+    VIEWS.forEach(function (v) { el[v].hidden = (v !== view); });
+  }
+
+  // 連線狀態同時顯示在首頁與線上大廳
+  function setConn(text) {
+    Array.prototype.forEach.call(document.querySelectorAll('.conn'), function (node) {
+      node.textContent = text;
+    });
+  }
+
+  function nick() { return el.nickname.value.trim(); }
+
+  /* ── 邀請連結 ─────────────────────────── */
+  // 連結長這樣：https://…/?room=ABCD
+  function inviteUrl(code) {
+    return location.origin + location.pathname + '?room=' + code;
+  }
+
+  function readInvite() {
+    var c = '';
+    try {
+      c = (new URLSearchParams(location.search).get('room') || '').toUpperCase().trim();
+      if (!c && location.hash.indexOf('room=') === 1) {
+        c = location.hash.slice(6).toUpperCase().trim();
+      }
+    } catch (e) { return null; }
+    return /^[A-Z0-9]{4}$/.test(c) ? c : null;
+  }
+
+  // 落地頁停留期間持續更新房間狀態，人滿或開打了按鈕就會自己變灰
+  function startInvitePoll() {
+    clearInterval(inviteTimer);
+    inviteTimer = setInterval(function () {
+      if (el['view-invite'].hidden || !inviteCode) { clearInterval(inviteTimer); inviteTimer = null; return; }
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'peek', code: inviteCode }));
+    }, 3000);
+  }
+
+  function endInvite() {
+    clearInterval(inviteTimer);
+    inviteTimer = null;
+    inviteCode = null;
+    try { history.replaceState(null, '', location.origin + location.pathname); } catch (e) {}
+  }
+
+  function renderInvite(m) {
+    var joinBtn = el['btn-invite-join'];
+    var specBtn = el['btn-invite-spec'];
+
+    if (!m.exists) {
+      el['invite-code'].textContent = m.code || '----';
+      el['invite-status'].textContent = '已關閉';
+      el['invite-status'].className = 'rstatus is-dead';
+      el['invite-meta'].textContent = '這個房間已經關閉，或房號有誤。';
+      joinBtn.disabled = true;
+      specBtn.disabled = true;
+      joinBtn.textContent = '加入對戰';
+      specBtn.textContent = '加入觀戰';
+      return;
+    }
+
+    var info = m.info;
+    var full = info.taken >= info.numPlayers;
+    el['invite-code'].textContent = info.code;
+    el['invite-status'].textContent = info.started ? '進行中' : '等待中';
+    el['invite-status'].className = 'rstatus ' + (info.started ? 'is-live' : 'is-wait');
+
+    var meta = info.numPlayers + ' 人局 · 已入座 ' + info.taken + '/' + info.numPlayers;
+    if (info.ai) meta += '（含 ' + info.ai + ' 個電腦）';
+    if (info.host) meta += ' · 房主 ' + info.host;
+    if (info.spectators) meta += ' · ' + info.spectators + ' 人觀戰';
+    el['invite-meta'].textContent = meta;
+
+    joinBtn.disabled = info.started || full;
+    joinBtn.textContent = info.started ? '已經開打，無法加入對戰'
+      : (full ? '房間已滿，無法加入對戰' : '加入對戰');
+    specBtn.disabled = false;
+    specBtn.textContent = info.started ? '加入觀戰（看現場）' : '加入觀戰';
+  }
+
+  function enterFromInvite(as) {
+    if (!inviteCode) return;
+    var typed = el['invite-nick'].value.trim();
+    if (typed) el.nickname.value = typed;
+    var code = inviteCode;
+    homeView = 'view-online';
+    endInvite();
+    joinCode(code, as);
   }
 
   /* ── 連線 ─────────────────────────────── */
@@ -55,20 +152,24 @@
     ws = new WebSocket(proto + '//' + location.host);
 
     ws.onopen = function () {
-      el['conn-status'].textContent = '已連線';
+      setConn('已連線');
       var saved = load();
-      if (saved && saved.code && saved.token) {
+      if (inviteCode) {
+        send({ t: 'peek', code: inviteCode });
+      } else if (saved && saved.code && saved.token) {
         send({ t: 'rejoin', code: saved.code, token: saved.token });
+      } else if (saved && saved.code && saved.spectator) {
+        send({ t: 'spectate', code: saved.code, name: nick() });
       } else {
-        send({ t: 'lobby' });          // 訂閱公開房間列表
+        send({ t: 'lobby' });          // 訂閱房間列表
       }
       onOpen && onOpen();
     };
     ws.onclose = function () {
-      el['conn-status'].textContent = '連線中斷，3 秒後重新連線…';
+      setConn('連線中斷，3 秒後重新連線…');
       setTimeout(function () { connect(); }, 3000);
     };
-    ws.onerror = function () { el['conn-status'].textContent = '連線發生問題'; };
+    ws.onerror = function () { setConn('連線發生問題'); };
     ws.onmessage = function (ev) {
       var m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
@@ -83,23 +184,39 @@
   }
 
   function save(code, tk) { try { localStorage.setItem('cc.session', JSON.stringify({ code: code, token: tk })); } catch (e) {} }
+  function saveSpectate(code) { try { localStorage.setItem('cc.session', JSON.stringify({ code: code, spectator: true })); } catch (e) {} }
   function load() { try { return JSON.parse(localStorage.getItem('cc.session') || 'null'); } catch (e) { return null; } }
   function clearSaved() { try { localStorage.removeItem('cc.session'); } catch (e) {} }
 
   function handle(m) {
     if (m.t === 'welcome') {
       mySeat = m.seat;
+      spectating = !!m.spectator;
       roomCode = m.code;
-      save(m.code, m.token);
+      if (spectating) saveSpectate(m.code);
+      else save(m.code, m.token);
+      return;
+    }
+    if (m.t === 'kicked') {              // 觀戰中的房間被收掉了
+      toast(m.msg || '房間已關閉');
+      clearSaved();
+      room = null; game = null; mySeat = -1; spectating = false;
+      homeView = 'view-online';
+      show('view-online');
+      send({ t: 'lobby' });
       return;
     }
     if (m.t === 'error') {
       toast(m.msg);
       pendingMove = false;
-      if (!room) send({ t: 'lobby' });   // 加入失敗，回大廳繼續看列表
+      if (!room) {                       // 加入失敗，回大廳繼續看列表
+        if (!el['view-invite'].hidden) { endInvite(); show('view-online'); }
+        send({ t: 'lobby' });
+      }
       return;
     }
     if (m.t === 'rooms') { renderRooms(m.rooms); return; }
+    if (m.t === 'roomInfo') { renderInvite(m); return; }
     if (m.t === 'sync') {
       room = m.room;
       game = m.game;
@@ -108,7 +225,33 @@
     }
   }
 
-  /* ── 大廳事件 ─────────────────────────── */
+  /* ── 首頁：選模式 ─────────────────────── */
+  function goOnline() {
+    homeView = 'view-online';
+    el['who-name'].textContent = nick() || '（未命名）';
+    show('view-online');
+    connect(function () { send({ t: 'lobby' }); });
+  }
+  function goLocal() {
+    homeView = 'view-local';
+    renderLocalSeats();
+    show('view-local');
+  }
+  el['btn-invite-join'].addEventListener('click', function () { enterFromInvite('player'); });
+  el['btn-invite-spec'].addEventListener('click', function () { enterFromInvite('spectator'); });
+  el['btn-invite-lobby'].addEventListener('click', function () {
+    var typed = el['invite-nick'].value.trim();
+    if (typed) el.nickname.value = typed;
+    endInvite();
+    goOnline();
+  });
+
+  el['btn-mode-online'].addEventListener('click', goOnline);
+  el['btn-mode-local'].addEventListener('click', goLocal);
+  el['btn-online-back'].addEventListener('click', function () { homeView = 'view-home'; show('view-home'); });
+  el['btn-local-back'].addEventListener('click', function () { homeView = 'view-home'; show('view-home'); });
+
+  /* ── 線上大廳事件 ─────────────────────── */
   el['seg-players'].addEventListener('click', function (e) {
     var b = e.target.closest('.seg-btn');
     if (!b) return;
@@ -122,50 +265,86 @@
     });
   });
 
-  el['btn-join'].addEventListener('click', function () {
+  function joinTyped(as) {
     var code = el['join-code'].value.trim().toUpperCase();
     if (code.length !== 4) return toast('房號是 4 個字元');
-    joinCode(code);
-  });
+    joinCode(code, as);
+  }
+  el['btn-join'].addEventListener('click', function () { joinTyped('player'); });
+  el['btn-spectate'].addEventListener('click', function () { joinTyped('spectator'); });
   el['join-code'].addEventListener('keydown', function (e) { if (e.key === 'Enter') el['btn-join'].click(); });
 
+  function copyText(text, okMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, function () { toast(text); });
+    } else {
+      toast(text);
+    }
+  }
   el['btn-copy'].addEventListener('click', function () {
     var text = roomCode || '';
-    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('已複製房號 ' + text); });
-    else toast('房號：' + text);
+    copyText(text, '已複製房號 ' + text);
+  });
+  el['btn-copy-link'].addEventListener('click', function () {
+    if (!roomCode) return;
+    copyText(inviteUrl(roomCode), '已複製邀請連結');
   });
 
   el['btn-start'].addEventListener('click', function () { send({ t: 'start' }); });
   el['btn-restart'].addEventListener('click', function () { send({ t: 'restart' }); });
 
-  function joinCode(code) {
-    connect(function () { send({ t: 'join', code: code, name: el.nickname.value }); });
+  function joinCode(code, as) {
+    connect(function () {
+      send(as === 'spectator'
+        ? { t: 'spectate', code: code, name: nick() }
+        : { t: 'join', code: code, name: nick() });
+    });
   }
 
   function renderRooms(list) {
-    el['rooms-count'].textContent = list.length ? list.length + ' 間等待中' : '';
+    var waiting = list.filter(function (r) { return !r.started; }).length;
+    el['rooms-count'].textContent = list.length
+      ? (waiting + ' 間等待中 · 共 ' + list.length + ' 間')
+      : '';
     el['rooms-list'].innerHTML = '';
     if (!list.length) {
       var empty = document.createElement('li');
       empty.className = 'rooms-empty';
-      empty.textContent = '目前沒有等待中的房間，建一間吧！';
+      empty.textContent = '目前沒有房間，建一間吧！';
       el['rooms-list'].appendChild(empty);
       return;
     }
     list.forEach(function (r) {
+      var full = r.taken >= r.numPlayers;
       var li = document.createElement('li');
       var info = r.numPlayers + ' 人局';
       if (r.ai) info += ' · 含 ' + r.ai + ' 個電腦';
       if (r.host) info += ' · 房主 ' + r.host;
-      li.innerHTML = '<span class="rcode">' + escapeHtml(r.code) + '</span>' +
+      if (r.spectators) info += ' · ' + r.spectators + ' 人觀戰';
+      li.innerHTML =
+        '<span class="rcode">' + escapeHtml(r.code) + '</span>' +
+        '<span class="rstatus ' + (r.started ? 'is-live' : 'is-wait') + '">' +
+          (r.started ? '進行中' : '等待中') + '</span>' +
         '<span class="rinfo">' + escapeHtml(info) + '</span>' +
         '<span class="rslots">' + r.taken + '/' + r.numPlayers + '</span>';
-      var b = document.createElement('button');
-      b.className = 'btn btn-sm';
-      b.textContent = r.taken >= r.numPlayers ? '已滿' : '加入';
-      b.disabled = r.taken >= r.numPlayers;
-      b.onclick = function () { joinCode(r.code); };
-      li.appendChild(b);
+
+      var acts = document.createElement('span');
+      acts.className = 'ractions';
+
+      var join = document.createElement('button');
+      join.className = 'btn btn-sm btn-primary';
+      join.textContent = r.started ? '已開打' : (full ? '已滿' : '加入對戰');
+      join.disabled = r.started || full;
+      join.onclick = function () { joinCode(r.code, 'player'); };
+      acts.appendChild(join);
+
+      var spec = document.createElement('button');
+      spec.className = 'btn btn-sm';
+      spec.textContent = '加入觀戰';
+      spec.onclick = function () { joinCode(r.code, 'spectator'); };
+      acts.appendChild(spec);
+
+      li.appendChild(acts);
       el['rooms-list'].appendChild(li);
     });
   }
@@ -223,11 +402,11 @@
   });
 
   el['btn-local-start'].addEventListener('click', function () {
-    var nick = el.nickname.value.trim();
+    var myName = nick();
     var seats = localCfg.map(function (c, i) {
       if (c.kind !== 'human') return c;
       var isFirstHuman = localCfg.findIndex(function (x) { return x.kind === 'human'; }) === i;
-      return { kind: 'human', name: (isFirstHuman && nick) ? nick : ('玩家 ' + (i + 1)) };
+      return { kind: 'human', name: (isFirstHuman && myName) ? myName : ('玩家 ' + (i + 1)) };
     });
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
     clearSaved();
@@ -239,9 +418,10 @@
     clearSaved();
     if (local) { local.send({ t: 'stop' }); local = null; }
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
-    mySeat = -1; roomCode = null; room = null; game = null; selected = -1;
-    el['conn-status'].textContent = OFFLINE ? '離線版：可對電腦或多人輪流同一台裝置' : '已離開房間';
-    show('view-lobby');
+    mySeat = -1; roomCode = null; room = null; game = null; selected = -1; spectating = false;
+    setConn(OFFLINE ? '離線版：可對電腦或多人輪流同一台裝置' : '已離開房間');
+    if (OFFLINE && homeView === 'view-online') homeView = 'view-home';
+    show(homeView);
     renderLocalSeats();
     if (!OFFLINE) connect(function () { send({ t: 'lobby' }); });
   }
@@ -264,7 +444,7 @@
   /* ── 座位列表（房間畫面） ───────────────── */
   var seatSig = '';
   function renderSeats() {
-    var sig = JSON.stringify([room.code, mySeat, room.started, room.seats]);
+    var sig = JSON.stringify([room.code, mySeat, spectating, room.started, room.seats, room.spectators]);
     if (sig === seatSig) return;
     seatSig = sig;
     el['room-code'].textContent = room.code;
@@ -317,11 +497,34 @@
       el['seat-list'].appendChild(li);
     });
 
+    renderSpectators();
+
+    var shareable = !room.local;
+    el['btn-copy-link'].hidden = !shareable;
+    el['invite-link-text'].hidden = !shareable;
+    if (shareable) el['invite-link-text'].textContent = inviteUrl(room.code);
+
     var ready = room.seats.every(function (s) { return s.kind !== 'open'; });
+    el['btn-start'].hidden = spectating;
     el['btn-start'].disabled = !(mySeat === 0 && ready);
-    el['room-hint'].textContent = mySeat === 0
-      ? (ready ? '座位已滿，可以開始了。' : '等待其他玩家加入，或用「加入電腦」補位。')
-      : '等待房主開始遊戲…';
+    el['room-hint'].textContent = spectating
+      ? '你正在觀戰。房主按下「開始遊戲」後就會看到棋盤。'
+      : (mySeat === 0
+        ? (ready ? '座位已滿，按「開始遊戲」就能開打。' : '等待其他玩家加入，或用「加入電腦」補位。')
+        : '等待房主開始遊戲…');
+  }
+
+  function renderSpectators() {
+    var list = (room && room.spectators) || [];
+    el['spectator-box'].hidden = !list.length;
+    el['spectator-count'].textContent = list.length ? list.length + ' 人' : '';
+    el['spectator-list'].innerHTML = '';
+    list.forEach(function (sp) {
+      var tag = document.createElement('span');
+      tag.className = 'spec-tag';
+      tag.textContent = sp.name;
+      el['spectator-list'].appendChild(tag);
+    });
   }
 
   function levelName(l) { return l === 'easy' ? '簡單' : l === 'hard' ? '困難' : '普通'; }
@@ -539,6 +742,7 @@
   function clearPath() { if (pathEl && pathEl.parentNode) pathEl.parentNode.removeChild(pathEl); pathEl = null; }
 
   function isMyTurn() {
+    if (spectating) return false;    // 觀戰只看不下
     if (pendingMove) return false;   // 已送出走法，等伺服器確認前先鎖住
     if (local) return !!(game && !game.over && room.seats[game.turn].kind === 'human');
     return !!(game && !game.over && game.turn === mySeat && game.finished.indexOf(mySeat) < 0);
@@ -635,6 +839,7 @@
   /* ── 面板 ─────────────────────────────── */
   function renderPanel() {
     el['game-code'].textContent = room.code;
+    el['spec-pill'].hidden = !spectating;
     var chatBox = document.querySelector('.chat-box');
     if (chatBox) chatBox.hidden = !!room.local;
 
@@ -663,6 +868,14 @@
       el.players.appendChild(d);
     });
 
+    if (room.spectators && room.spectators.length) {
+      var sp = document.createElement('div');
+      sp.className = 'pcard pcard-spec';
+      sp.innerHTML = '<span class="nm"><b>觀戰 ' + room.spectators.length + ' 人</b><small>' +
+        escapeHtml(room.spectators.map(function (x) { return x.name; }).join('、')) + '</small></span>';
+      el.players.appendChild(sp);
+    }
+
     el.history.innerHTML = '';
     if (!(room.history || []).length) {
       var em = document.createElement('li');
@@ -684,7 +897,9 @@
     el.chat.innerHTML = '';
     (room.chat || []).forEach(function (c) {
       var d = document.createElement('div');
-      d.innerHTML = '<span>' + escapeHtml(c.name || '') + '：</span>' + escapeHtml(c.text);
+      if (c.spec) d.className = 'spec';
+      d.innerHTML = '<span>' + escapeHtml(c.name || '') + (c.spec ? '（觀眾）' : '') + '：</span>' +
+        escapeHtml(c.text);
       el.chat.appendChild(d);
     });
     el.chat.scrollTop = el.chat.scrollHeight;
@@ -733,7 +948,7 @@
 
   /* ── 主渲染 ───────────────────────────── */
   function render() {
-    if (!room) { show('view-lobby'); return; }
+    if (!room) { show(homeView); return; }
     if (!room.started || !game) {
       show('view-room');
       renderSeats();
@@ -760,8 +975,17 @@
   renderLocalSeats();
   document.querySelectorAll('[data-online]').forEach(function (n) { n.hidden = OFFLINE; });
   buildBoardSvg();
-  if (!OFFLINE) connect();
-  else el['conn-status'].textContent = '離線版：可對電腦或多人輪流同一台裝置';
+  if (!OFFLINE) {
+    inviteCode = readInvite();
+    if (inviteCode) {
+      el['invite-code'].textContent = inviteCode;
+      show('view-invite');
+      startInvitePoll();
+    }
+    connect();
+  } else {
+    setConn('離線版：可對電腦或多人輪流同一台裝置');
+  }
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { selected = -1; legal = []; clearPath(); drawHints(); drawPieces(); el['rules-modal'].hidden = true; }
   });

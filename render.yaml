@@ -10,6 +10,6 @@ services:
     healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
-        value: "22"
+        value: "24"
       - key: AI_DELAY_MS
         value: "700"

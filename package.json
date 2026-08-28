@@ -6,9 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/rules.test.js"
+    "test": "node test/rules.test.js && node test/lobby.test.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": { "node": ">=24" },
   "dependencies": {
     "express": "^4.19.2",
     "ws": "^8.18.0"

@@ -38,7 +38,7 @@ const lobbyClients = new Set();
 function roomList() {
   const list = [];
   for (const r of rooms.values()) {
-    if (r.started || r.private) continue;
+    if (r.private) continue;                 // 不公開房間只能靠房號進入
     const taken = r.seats.filter(s => s.kind !== 'open').length;
     if (taken === 0) continue;
     list.push({
@@ -48,10 +48,13 @@ function roomList() {
       humans: r.seats.filter(s => s.kind === 'human').length,
       ai: r.seats.filter(s => s.kind === 'ai').length,
       host: r.seats[0].name || '',
+      started: r.started,                    // 進行中的房間仍可加入觀戰
+      spectators: r.spectators.size,
       createdAt: r.createdAt
     });
   }
-  list.sort((a, b) => b.createdAt - a.createdAt);
+  // 還沒開打的排前面，同組再依建立時間由新到舊
+  list.sort((a, b) => (a.started - b.started) || (b.createdAt - a.createdAt));
   return list.slice(0, 50);
 }
 
@@ -94,6 +97,7 @@ class Room {
     this.emptySince = now();
     this.createdAt = now();
     this.private = false;
+    this.spectators = new Set();   // 只看不下的連線
     rooms.set(this.code, this);
   }
 
@@ -122,6 +126,7 @@ class Room {
         numPlayers: this.numPlayers,
         started: this.started,
         seats: this.publicSeats(),
+        spectators: [...this.spectators].map(w => ({ name: w.specName || '觀眾' })),
         chat: this.chat.slice(-40),
         history: this.history.slice(-60)
       },
@@ -143,6 +148,21 @@ class Room {
     for (const s of this.seats) {
       if (s.socket && s.socket.readyState === 1) s.socket.send(raw);
     }
+    for (const w of this.spectators) {
+      if (w.readyState === 1) w.send(raw);
+    }
+  }
+
+  addSpectator(ws, name) {
+    detach(ws);
+    ws.roomCode = this.code;
+    ws.seatIndex = -1;
+    ws.spectator = true;
+    ws.specName = name;
+    this.spectators.add(ws);
+    lobbyClients.delete(ws);
+    send(ws, { t: 'welcome', code: this.code, seat: -1, token: null, hostSeat: 0, spectator: true });
+    this.sync();
   }
 
   sync() { this.broadcast(this.snapshot()); broadcastLobby(); }
@@ -213,6 +233,12 @@ class Room {
 
   dispose() {
     clearTimeout(this.aiTimer);
+    for (const w of this.spectators) {
+      w.roomCode = null;
+      w.spectator = false;
+      send(w, { t: 'kicked', msg: '房間已關閉' });
+    }
+    this.spectators.clear();
     rooms.delete(this.code);
     broadcastLobby();
   }
@@ -223,7 +249,17 @@ function send(ws, msg) {
 }
 const fail = (ws, msg) => send(ws, { t: 'error', msg });
 
+/** 入座或換房前，先把這條連線從原本的觀戰席移除 */
+function detach(ws) {
+  if (!ws.spectator) return;
+  const prev = ws.roomCode ? rooms.get(ws.roomCode) : null;
+  ws.spectator = false;
+  ws.specName = null;
+  if (prev && prev.spectators.delete(ws)) prev.sync();
+}
+
 function attach(ws, room, seatIndex, name, tk) {
+  detach(ws);
   const seat = room.seats[seatIndex];
   seat.kind = 'human';
   seat.name = name;
@@ -263,17 +299,46 @@ wss.on('connection', (ws) => {
       }
 
       case 'lobby': {
+        detach(ws);
         lobbyClients.add(ws);
         send(ws, { t: 'rooms', rooms: roomList() });
+        break;
+      }
+
+      case 'peek': {           // 邀請連結落地頁查詢房間狀態
+        const code = String(m.code || '').toUpperCase().trim();
+        const r = rooms.get(code);
+        if (!r) return send(ws, { t: 'roomInfo', code: code, exists: false });
+        send(ws, {
+          t: 'roomInfo',
+          exists: true,
+          info: {
+            code: r.code,
+            numPlayers: r.numPlayers,
+            taken: r.seats.filter(s => s.kind !== 'open').length,
+            ai: r.seats.filter(s => s.kind === 'ai').length,
+            host: r.seats[0].name || '',
+            started: r.started,
+            spectators: r.spectators.size
+          }
+        });
+        break;
+      }
+
+      case 'spectate': {
+        const r = rooms.get(String(m.code || '').toUpperCase().trim());
+        if (!r) return fail(ws, '找不到這個房間代碼');
+        if (r.spectators.has(ws)) return;
+        r.addSpectator(ws, cleanName(m.name, '觀眾'));
         break;
       }
 
       case 'join': {
         const r = rooms.get(String(m.code || '').toUpperCase().trim());
         if (!r) return fail(ws, '找不到這個房間代碼');
-        if (r.started) return fail(ws, '這局已經開始了');
+        if (r.started) return fail(ws, '這局已經開始了，可以改用「加入觀戰」');
         const idx = r.seats.findIndex(s => s.kind === 'open');
-        if (idx < 0) return fail(ws, '房間已滿');
+        if (idx < 0) return fail(ws, '房間已滿，可以改用「加入觀戰」');
         attach(ws, r, idx, cleanName(m.name, `玩家 ${idx + 1}`), token());
         break;
       }
@@ -283,6 +348,7 @@ wss.on('connection', (ws) => {
         if (!r) return fail(ws, '房間已不存在');
         const idx = r.seats.findIndex(s => s.token && s.token === m.token);
         if (idx < 0) return fail(ws, '無法回到原座位');
+        detach(ws);
         const seat = r.seats[idx];
         if (seat.socket && seat.socket !== ws && seat.socket.readyState === 1) {
           seat.socket.close(4001, '同一座位在別處重新連線');
@@ -350,6 +416,7 @@ wss.on('connection', (ws) => {
       }
 
       case 'move': {
+        if (ws.spectator) return fail(ws, '觀戰中不能走子');
         if (!room || !room.state) return fail(ws, '對局尚未開始');
         if (seatIndex !== room.state.turn) return fail(ws, '還沒輪到你');
         const res = Rules.applyMove(room.state, seatIndex, Number(m.from), Number(m.to));
@@ -364,7 +431,9 @@ wss.on('connection', (ws) => {
         if (!room) return;
         const text = String(m.text || '').trim().slice(0, 200);
         if (!text) return;
-        room.chat.push({ seat: seatIndex, name: room.seats[seatIndex].name, text, at: now() });
+        const spec = !!ws.spectator;
+        const who = spec ? (ws.specName || '觀眾') : room.seats[seatIndex].name;
+        room.chat.push({ seat: spec ? -1 : seatIndex, name: who, text, at: now(), spec: spec });
         if (room.chat.length > 100) room.chat.shift();
         room.sync();
         break;
@@ -380,6 +449,11 @@ wss.on('connection', (ws) => {
     lobbyClients.delete(ws);
     const room = ws.roomCode ? rooms.get(ws.roomCode) : null;
     if (!room) return;
+    if (ws.spectator) {
+      ws.spectator = false;
+      if (room.spectators.delete(ws)) room.sync();
+      return;
+    }
     const seat = room.seats[ws.seatIndex];
     if (seat && seat.socket === ws) {
       seat.connected = false;

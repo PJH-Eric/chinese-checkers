@@ -5,9 +5,11 @@
 | 形態 | 內容 | 放哪裡 |
 | --- | --- | --- |
 | **靜態單機版** | 對電腦、或多人輪流用同一台裝置 | GitHub Pages（免費、免維護） |
-| **連線對戰版** | 房間配對、最多 3 人線上對戰 | Render / Railway / 自架（需要能跑 Node + WebSocket） |
+| **連線對戰版** | 房間大廳、最多 3 人線上對戰、觀戰、邀請連結 | Render / Railway / 自架（需要能跑 Node + WebSocket） |
 
-GitHub Pages 只服務靜態檔案，跑不了 Node 伺服器，所以線上對戰一定要另外找地方跑。
+GitHub Pages 只服務靜態檔案，跑不了 Node 伺服器，所以線上對戰、觀戰、邀請連結一定要另外找地方跑。
+
+執行環境一律用 **Node.js 24 LTS**（Dockerfile、render.yaml、GitHub Actions、`.nvmrc` 都已對齊）。
 
 ---
 
