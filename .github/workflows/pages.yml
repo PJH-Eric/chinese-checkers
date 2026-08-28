@@ -25,6 +25,9 @@ jobs:
       - name: Build static build
         run: node build-static.js "${{ vars.ONLINE_URL }}"
       - uses: actions/configure-pages@v5
+        with:
+          # 倉庫尚未啟用 Pages 時，讓 workflow 自動以 GitHub Actions 為來源啟用
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
