@@ -1,0 +1,17 @@
+{
+  "name": "chinese-checkers",
+  "version": "1.0.0",
+  "description": "網頁版中國跳棋（六角星 121 格），支援最多 3 人線上連線對戰與 AI 補位",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/rules.test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

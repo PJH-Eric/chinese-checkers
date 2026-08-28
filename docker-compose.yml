@@ -1,0 +1,8 @@
+services:
+  checkers:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      AI_DELAY_MS: "700"
+    restart: unless-stopped

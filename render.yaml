@@ -1,0 +1,15 @@
+# Render 藍圖：連上此 repo 後選 "New > Blueprint" 即可一鍵部署連線版
+# 免費方案支援 WebSocket；閒置一段時間會休眠，首次連線需等幾秒喚醒
+services:
+  - type: web
+    name: chinese-checkers
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: AI_DELAY_MS
+        value: "700"

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>跳棋 · 線上對戰</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='11' fill='%23ef4444'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="toast" class="toast" hidden></div>
+
+<!-- ── 大廳 ───────────────────────────────────────────── -->
+<section id="view-lobby" class="view">
+  <div class="lobby-card">
+    <h1 class="brand">跳棋<span>Chinese Checkers</span></h1>
+    <p class="tagline">六角星 121 格 · 標準跳法 · 最多 3 人線上對戰</p>
+
+    <label class="field">
+      <span>你的暱稱</span>
+      <input id="nickname" maxlength="16" placeholder="輸入暱稱" autocomplete="off">
+    </label>
+
+    <div class="lobby-split" data-online>
+      <div class="lobby-block">
+        <h2>建立房間</h2>
+        <div class="seg" id="seg-players">
+          <button class="seg-btn is-on" data-n="3">3 人局</button>
+          <button class="seg-btn" data-n="2">2 人局</button>
+        </div>
+        <label class="check"><input type="checkbox" id="chk-private"><span>不公開（只有拿到房號的人能加入）</span></label>
+        <button id="btn-create" class="btn btn-primary">建立並取得房號</button>
+      </div>
+
+      <div class="lobby-block">
+        <h2>加入房間</h2>
+        <input id="join-code" class="code-input" maxlength="4" placeholder="房號" autocomplete="off" spellcheck="false">
+        <button id="btn-join" class="btn">加入</button>
+      </div>
+    </div>
+
+    <div class="local-block">
+      <h2>本機對戰<span class="badge">不需連線</span></h2>
+      <p class="local-hint">對電腦，或幾個人輪流用這一台裝置下。</p>
+      <div class="seg" id="seg-local-players">
+        <button class="seg-btn is-on" data-n="3">3 人局</button>
+        <button class="seg-btn" data-n="2">2 人局</button>
+      </div>
+      <div id="local-seats" class="local-seats"></div>
+      <button id="btn-local-start" class="btn btn-primary">開始本機對戰</button>
+    </div>
+
+    <div class="rooms-block" data-online>
+      <div class="rooms-head">
+        <h2>公開房間</h2>
+        <span id="rooms-count" class="rooms-count"></span>
+      </div>
+      <ul id="rooms-list" class="rooms-list"><li class="rooms-empty">目前沒有等待中的房間，建一間吧！</li></ul>
+    </div>
+
+    <button id="btn-rules-lobby" class="link-btn">查看規則說明</button>
+    <p class="conn" id="conn-status">連線中…</p>
+  </div>
+</section>
+
+<!-- ── 房間等待 ─────────────────────────────────────────── -->
+<section id="view-room" class="view" hidden>
+  <div class="lobby-card">
+    <h2 class="room-title">房間代碼</h2>
+    <div class="code-display">
+      <span id="room-code">----</span>
+      <button id="btn-copy" class="btn btn-ghost">複製</button>
+    </div>
+    <p class="tagline">把房號給朋友，他們在首頁輸入即可加入。</p>
+
+    <ul id="seat-list" class="seat-list"></ul>
+
+    <div class="room-actions">
+      <button id="btn-start" class="btn btn-primary">開始遊戲</button>
+      <button id="btn-leave-room" class="btn btn-ghost">離開</button>
+    </div>
+    <p id="room-hint" class="hint"></p>
+  </div>
+</section>
+
+<!-- ── 對局 ───────────────────────────────────────────── -->
+<section id="view-game" class="view view-game" hidden>
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="pill" id="game-code">----</span>
+      <span class="turn-chip" id="turn-chip">等待中</span>
+    </div>
+    <div class="topbar-right">
+      <button id="btn-rules" class="btn btn-ghost btn-sm">規則</button>
+      <button id="btn-restart" class="btn btn-ghost btn-sm" hidden>再來一局</button>
+      <button id="btn-leave" class="btn btn-ghost btn-sm">離開</button>
+    </div>
+  </header>
+
+  <main class="game-grid">
+    <div class="board-wrap">
+      <svg id="board" viewBox="-11.2 -12.8 22.4 25.6" role="application" aria-label="跳棋棋盤"></svg>
+      <div id="banner" class="banner" hidden></div>
+    </div>
+
+    <aside class="panel">
+      <div id="players" class="players"></div>
+
+      <div class="panel-box">
+        <h3>棋譜</h3>
+        <ol id="history" class="history"></ol>
+      </div>
+
+      <div class="panel-box chat-box">
+        <h3>聊天</h3>
+        <div id="chat" class="chat"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="200" placeholder="說點什麼…" autocomplete="off">
+          <button class="btn btn-sm">送出</button>
+        </form>
+      </div>
+    </aside>
+  </main>
+</section>
+
+<!-- ── 規則說明 ─────────────────────────────────────────── -->
+<div id="rules-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h2>中國跳棋規則</h2>
+    <h3>棋盤與佈局</h3>
+    <ul>
+      <li>六角星形棋盤共 <b>121 格</b>，六個角各有 10 格的三角形陣營。</li>
+      <li>每位玩家 <b>10 顆棋子</b>，開局全部放在自己的陣營。</li>
+      <li>一律使用<b>相間的角</b>（3 人局：上、右下、左下；2 人局：上、右下），距離對稱最公平。</li>
+      <li>目標是自己<b>正對面</b>的三角形，開局時是空的——不會是別人的出發陣營。</li>
+      <li>棋盤上你的目標三角形會用<b>你的顏色</b>加粗標示，並有一條箭頭從你的陣營指過去。</li>
+    </ul>
+    <h3>走法</h3>
+    <ul>
+      <li><b>單步</b>：往六個相鄰方向之一移動一格到空格。</li>
+      <li><b>跳躍</b>：緊鄰有一顆棋子（<b>敵我皆可</b>）、且其正後方為空格時，可跳過去。被跳過的棋子不會被吃掉。</li>
+      <li><b>連跳</b>：跳躍後若還能繼續跳，可以一路連跳；連跳算同一步。</li>
+      <li>單步與跳躍<b>不能混用</b>，一回合只能擇一。</li>
+    </ul>
+    <h3>限制</h3>
+    <ul>
+      <li>連跳途中<b>可以經過</b>其他玩家的出發／目標陣營，但<b>不能停</b>在裡面。</li>
+      <li>棋子一旦進入自己的目標陣營，就<b>不能再離開</b>（可在陣營內移動）。</li>
+    </ul>
+    <h3>勝負</h3>
+    <ul>
+      <li>先把 10 顆棋子全部送進<b>正對面</b>的三角形者獲勝。</li>
+      <li>若目標陣營被對手棋子占住無法清空，只要該陣營 10 格全滿且其中至少有你一顆棋子，同樣算達陣。</li>
+      <li>其餘玩家繼續比賽決定名次。</li>
+    </ul>
+    <button id="btn-rules-close" class="btn btn-primary">知道了</button>
+  </div>
+</div>
+
+<script src="game.js"></script>
+<script src="ai.js"></script>
+<script src="local.js"></script>
+<script src="client.js"></script>
+</body>
+</html>
