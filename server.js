@@ -26,9 +26,42 @@ const MAX_ROOMS = Number(process.env.MAX_ROOMS || 500);   // 同時存在的房�
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const app = express();
+const ALLOWED_ORIGINS = String(process.env.GAME_ALLOWED_ORIGIN || '*')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const allowAllOrigins = ALLOWED_ORIGINS.includes('*');
+
+function originAllowed(origin) {
+  return allowAllOrigins || !origin || ALLOWED_ORIGINS.includes(origin);
+}
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && originAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', allowAllOrigins ? '*' : origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 app.get('/healthz', (_req, res) => res.json({ ok: true, rooms: rooms.size, maxRooms: MAX_ROOMS }));
 app.get('/api/rooms', (_req, res) => res.json({ rooms: roomList(), total: rooms.size }));
+app.get('/api/presence', (_req, res) => {
+  const players = [...rooms.values()].reduce((total, room) => total + room.seats.filter((seat) => seat.kind === 'human' && seat.connected).length, 0);
+  const spectators = [...rooms.values()].reduce((total, room) => total + [...room.spectators].filter((socket) => socket.readyState === 1).length, 0);
+  const activeRooms = [...rooms.values()].filter((room) => room.humansConnected() || room.spectators.size > 0).length;
+  res.json({
+    gameId: 'chinese-checkers',
+    online: wss.clients.size,
+    players,
+    spectators,
+    lobby: lobbyClients.size,
+    rooms: activeRooms,
+    updatedAt: new Date().toISOString()
+  });
+});
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
