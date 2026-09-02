@@ -34,6 +34,20 @@ button, input { font: inherit; color: inherit; }
 
 .view { min-height: 100%; display: flex; flex-direction: column; }
 .view:not(.view-game) { align-items: center; justify-content: center; padding: 24px; }
+.lobby-home-link {
+  position: fixed; z-index: 55; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 13px;
+  border: 1px solid #3f4e6b; border-radius: 10px; background: #1e2531; color: var(--ink);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .24); font-size: 13px; font-weight: 700; text-decoration: none;
+  transition: .15s;
+}
+.lobby-home-link:hover { background: #2a3547; border-color: #5f8cff; transform: translateY(-1px); }
+.lobby-home-link:active { transform: translateY(1px); }
+.lobby-home-link:focus-visible { outline: 3px solid #7aa2ff; outline-offset: 2px; }
+@media (max-width: 600px) {
+  .lobby-home-link { top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); padding: 7px 10px; font-size: 12px; }
+  #view-home .lobby-card { margin-top: 54px; }
+}
 
 /* ── 通用元件 ─────────────────────────────── */
 .btn {
