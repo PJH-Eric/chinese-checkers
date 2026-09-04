@@ -494,3 +494,36 @@ button, input { font: inherit; color: inherit; }
   color: #f3a2ae; background: rgba(239, 68, 68, .14);
   border: 1px solid rgba(239, 68, 68, .38); border-radius: 999px; padding: 1px 8px;
 }
+
+/* ================================================================
+ * 手機軟體鍵盤修正（keyboard.js 量測後寫入 --app-h／--kb）
+ * 對局畫面剛好塞滿一個螢幕高，鍵盤升起時沒有可捲動空間，聊天輸入框
+ * 會被鍵盤蓋住。把滿版高度改成真正看得到的高度即可。
+ * ================================================================ */
+.view { min-height: var(--app-h, 100%); }
+/* 鍵盤蓋住的那段補成對局畫面下緣的留白，瀏覽器才有空間把輸入框捲上來 */
+body.kb-open .view-game { padding-bottom: calc(var(--kb, 0px) + 50vh); }
+/* 棋盤原本按 vh 算高度，鍵盤升起時要按真正看得到的高度重算 */
+body.kb-open #board { max-height: calc(var(--app-h, 100dvh) - 110px); }
+input, textarea, select { user-select: text; -webkit-user-select: text; }
+@media (pointer: coarse) {
+  .chat-form input, .field input, .code-input { font-size: 16px; }
+}
+
+/* 矮橫向（手機橫拿）鍵盤升起後只剩很窄一條可見，這時把聊天室改成蓋在畫面
+ * 上的浮層，打字時視覺才不會整片被推走。 */
+@media (orientation: landscape) and (max-height: 560px) {
+  body.kb-open .view-game { padding-bottom: 0; }
+  body.kb-open .chat-box {
+    position: fixed; z-index: 200;
+    top: 6px; left: 8px; right: 8px;
+    height: calc(var(--app-h, 100dvh) - 12px);
+    margin: 0; display: flex; flex-direction: column; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 10px 12px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .45);
+  }
+  body.kb-open .chat-box h3 { margin: 0; }
+  body.kb-open .chat-box .chat { flex: 1 1 auto; height: auto; min-height: 0; }
+  body.kb-open .chat-box .chat-form { margin-top: 0; }
+}
