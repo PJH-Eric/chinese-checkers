@@ -82,6 +82,7 @@
   function show(view) {
     VIEWS.forEach(function (v) { el[v].hidden = (v !== view); });
     document.body.dataset.view = view;
+    if (window.NetworkLatency) window.NetworkLatency.setActive(view === 'view-game' && !!(room && room.started && game && !room.local && !game.over));
     if (view !== 'view-game') setPanelOpen(false);
   }
 
@@ -362,6 +363,9 @@
 
     ws.onopen = function () {
       setConn('已連線');
+      if (window.NetworkLatency) window.NetworkLatency.setProbe(function () {
+        if (ws && ws.readyState === 1) send({ t: 'ping', at: performance.now() });
+      });
       var saved = load();
       if (inviteCode) {
         send({ t: 'peek', code: inviteCode });
@@ -375,6 +379,7 @@
       onOpen && onOpen();
     };
     ws.onclose = function () {
+      if (window.NetworkLatency) window.NetworkLatency.report(null);
       setConn('連線中斷，3 秒後重新連線…');
       setTimeout(function () { connect(); }, 3000);
     };
@@ -402,6 +407,10 @@
   function clearSaved() { try { localStorage.removeItem('cc.session'); } catch (e) {} }
 
   function handle(m) {
+    if (m.t === 'pong') {
+      if (window.NetworkLatency && typeof m.at === 'number') window.NetworkLatency.report(performance.now() - m.at);
+      return;
+    }
     if (m.t === 'welcome') {
       mySeat = m.seat;
       spectating = !!m.spectator;

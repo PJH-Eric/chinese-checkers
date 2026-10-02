@@ -512,7 +512,7 @@ wss.on('connection', (ws) => {
       }
 
       case 'ping':
-        send(ws, { t: 'pong' });
+        send(ws, { t: 'pong', at: m.at });
         break;
     }
   });
