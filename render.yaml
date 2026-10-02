@@ -5,6 +5,7 @@ services:
     name: chinese-checkers
     runtime: node
     plan: free
+    region: singapore
     buildCommand: npm ci
     startCommand: node server.js
     healthCheckPath: /healthz
