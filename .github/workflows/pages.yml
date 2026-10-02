@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: '24'
       - name: Build static build
-        run: node build-static.js "${{ vars.ONLINE_URL }}"
+        env:
+          GAME_SERVER_URL: ${{ vars.GAME_SERVER_URL }}
+        run: node build-static.js
       - uses: actions/configure-pages@v6
         with:
           # 倉庫尚未啟用 Pages 時，讓 workflow 自動以 GitHub Actions 為來源啟用

@@ -11,7 +11,7 @@
 線上試玩：
 
 - **單機版**（對電腦 / 同裝置輪流）：<https://pjh-eric.github.io/chinese-checkers/>
-- **連線對戰版**（最多 3 人）：<https://chinese-checkers-7p4g.onrender.com/>
+- **連線對戰版**（最多 3 人）：<https://chinese-checkers-sg.onrender.com/>
 
 > 連線版跑在 Render 免費方案，閒置約 15 分鐘會休眠，第一個連進來的人要等幾秒喚醒。
 
